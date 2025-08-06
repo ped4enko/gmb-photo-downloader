@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Google Maps Images Extractor
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.5
 // @description  Extract and download high-resolution images from Google Maps contributor pages
 // @author       Pedchenko for Best California Movers
 // @match        https://www.google.com/maps/contrib/*
@@ -66,6 +66,34 @@
                         ">
                             Downloads gps-cs and geougc-cs images at ${config.targetResolution} resolution
                         </div>
+                        
+                        <div style="margin-bottom: 12px;">
+                            <label style="display: block; margin-bottom: 6px; font-size: 13px; text-align: left;">
+                                📝 Author Name (for filename):
+                            </label>
+                            <div style="display: flex; gap: 8px;">
+                                <input id="author-name" type="text" placeholder="Enter author name..." style="
+                                    flex: 1;
+                                    padding: 8px;
+                                    border: 1px solid rgba(255,255,255,0.3);
+                                    border-radius: 4px;
+                                    background: rgba(255,255,255,0.1);
+                                    color: white;
+                                    font-size: 12px;
+                                " />
+                                <button id="auto-detect-author" style="
+                                    background: #ff6d01;
+                                    color: white;
+                                    border: none;
+                                    padding: 8px 12px;
+                                    border-radius: 4px;
+                                    cursor: pointer;
+                                    font-size: 11px;
+                                    white-space: nowrap;
+                                ">🔍 Auto</button>
+                            </div>
+                        </div>
+                        
                         <button id="scan-images" style="
                             background: #34a853;
                             color: white;
@@ -279,25 +307,70 @@
 
     // Convert Google Photos URL to high resolution
     function convertToHighResolution(url) {
+        // Decode URL-encoded characters
+        let decodedUrl = url.replace(/\/\/u003d/g, '=').replace(/%3D/g, '=');
+        
         // Remove existing size parameters and add high resolution parameter
-        // Pattern: =w1200-h969-p-k-no or =w400-h300-no or similar
-        const sizeParamRegex = /=[wh]\d+(-[wh]\d+)*(-[a-z-]+)*(-no)?$/;
-        let cleanUrl = url.replace(sizeParamRegex, '');
+        // Pattern: =w1200-h969-p-k-no or =w400-h300-no or similar, including the trailing slash if present
+        const sizeParamRegex = /=[wh]\d+(-[wh]\d+)*(-[a-z-]+)*(-no)?\/?$/;
+        let cleanUrl = decodedUrl.replace(sizeParamRegex, '');
+        
+        // Remove any trailing slash
+        cleanUrl = cleanUrl.replace(/\/$/, '');
         
         // Add high resolution parameter
         return cleanUrl + '=' + config.targetResolution;
     }
 
-    // Generate filename from URL
-    function getFilenameFromUrl(url, index) {
+    // Auto-detect author name from page
+    function detectAuthorName() {
+        // Try different selectors for author name
+        const selectors = [
+            'h1.geAzIe.fontHeadlineLarge',
+            'button.fontTitleSmall.sZ0S5.ZqLNQd',
+            'h1[class*="fontHeadlineLarge"]',
+            'button[class*="fontTitleSmall"]'
+        ];
+        
+        for (const selector of selectors) {
+            const element = document.querySelector(selector);
+            if (element && element.textContent.trim()) {
+                const name = element.textContent.trim();
+                // Basic validation - should be a reasonable name
+                if (name.length > 0 && name.length < 50 && !name.includes('http')) {
+                    console.log(`Found author name: ${name}`);
+                    return name;
+                }
+            }
+        }
+        
+        console.log('Could not auto-detect author name');
+        return '';
+    }
+
+    // Generate filename with author name from URL
+    function getFilenameFromUrl(url, index, authorName = '') {
         try {
             // Extract the unique ID from Google Photos URL
             const urlParts = url.split('/');
             const imageId = urlParts[urlParts.length - 1].split('=')[0];
             const shortId = imageId.substring(0, 16); // Use first 16 characters
-            return `gmaps_image_${index + 1}_${shortId}.jpg`;
+            
+            // Clean author name for filename
+            const cleanAuthorName = authorName.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').substring(0, 20);
+            
+            if (cleanAuthorName) {
+                return `${cleanAuthorName}_gmaps_image_${index + 1}_${shortId}.jpg`;
+            } else {
+                return `gmaps_image_${index + 1}_${shortId}.jpg`;
+            }
         } catch {
-            return `gmaps_image_${index + 1}_${Date.now()}.jpg`;
+            const cleanAuthorName = authorName.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').substring(0, 20);
+            if (cleanAuthorName) {
+                return `${cleanAuthorName}_gmaps_image_${index + 1}_${Date.now()}.jpg`;
+            } else {
+                return `gmaps_image_${index + 1}_${Date.now()}.jpg`;
+            }
         }
     }
 
@@ -307,6 +380,7 @@
         const countDiv = document.getElementById('image-count');
         const listDiv = document.getElementById('image-list');
         const selectionControls = document.getElementById('selection-controls');
+        const authorName = document.getElementById('author-name').value;
         
         countDiv.innerHTML = `
             <span style="color: #34a853;">✓ Found ${images.length} Google Photos images</span><br>
@@ -324,16 +398,18 @@
                 background: rgba(255,255,255,0.05);
             `;
             
-            const filename = getFilenameFromUrl(img.highResUrl, index);
+            const filename = getFilenameFromUrl(img.highResUrl, index, authorName);
             
             imgDiv.innerHTML = `
                 <label style="display: flex; align-items: center; cursor: pointer;">
                     <input type="checkbox" checked data-index="${index}" style="margin-right: 10px; transform: scale(1.2);">
+                    <img src="${img.originalUrl}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 4px; margin-right: 10px;" 
+                         onerror="this.style.display='none';" loading="lazy">
                     <div style="flex: 1;">
                         <div style="font-weight: 500; font-size: 13px; margin-bottom: 4px;">${filename}</div>
                         <div style="font-size: 11px; opacity: 0.8;">High-res: ${config.targetResolution}</div>
                         <div style="font-size: 10px; opacity: 0.6; word-break: break-all; margin-top: 2px;">
-                            ${img.originalUrl.substring(0, 60)}...
+                            ${img.originalUrl.substring(0, 40)}...
                         </div>
                     </div>
                 </label>
@@ -406,6 +482,7 @@
     // Download selected images
     async function downloadImages(images, selectedOnly = false) {
         const progressDiv = document.getElementById('progress');
+        const authorName = document.getElementById('author-name').value;
         progressDiv.style.display = 'block';
         
         let imagesToDownload = images;
@@ -426,7 +503,7 @@
         
         for (let i = 0; i < imagesToDownload.length; i++) {
             const imageData = imagesToDownload[i];
-            const filename = getFilenameFromUrl(imageData.highResUrl, i);
+            const filename = getFilenameFromUrl(imageData.highResUrl, i, authorName);
             await downloadImage(imageData, filename, i, imagesToDownload.length);
         }
         
@@ -446,6 +523,26 @@
         
         document.getElementById('close-panel').addEventListener('click', () => {
             document.getElementById('gmaps-image-extractor-panel').remove();
+        });
+
+        // Auto-detect author button
+        document.getElementById('auto-detect-author').addEventListener('click', () => {
+            const detectedName = detectAuthorName();
+            const authorInput = document.getElementById('author-name');
+            if (detectedName) {
+                authorInput.value = detectedName;
+                authorInput.style.borderColor = '#34a853';
+                setTimeout(() => {
+                    authorInput.style.borderColor = 'rgba(255,255,255,0.3)';
+                }, 2000);
+            } else {
+                authorInput.style.borderColor = '#ea4335';
+                authorInput.placeholder = 'Could not auto-detect. Enter manually...';
+                setTimeout(() => {
+                    authorInput.style.borderColor = 'rgba(255,255,255,0.3)';
+                    authorInput.placeholder = 'Enter author name...';
+                }, 3000);
+            }
         });
         
         document.getElementById('scan-images').addEventListener('click', () => {
