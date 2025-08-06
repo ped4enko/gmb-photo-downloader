@@ -1,11 +1,10 @@
 // ==UserScript==
 // @name         Google Maps Images Extractor
 // @namespace    http://tampermonkey.net/
-// @version      1.2
+// @version      1.0
 // @description  Extract and download high-resolution images from Google Maps contributor pages
-// @author       Ped4enko
+// @author       Pedchenko for Best California Movers
 // @match        https://www.google.com/maps/contrib/*
-// @icon         data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
 // @grant        none
 // ==/UserScript==
 
@@ -65,7 +64,7 @@
                             font-size: 12px;
                             margin-bottom: 12px;
                         ">
-                            Downloads images at ${config.targetResolution} resolution
+                            Downloads gps-cs and geougc-cs images at ${config.targetResolution} resolution
                         </div>
                         <button id="scan-images" style="
                             background: #34a853;
@@ -79,7 +78,7 @@
                             font-weight: 500;
                         ">🔍 Scan for Google Photos Images</button>
                     </div>
-
+                    
                     <div id="results" style="
                         max-height: 300px;
                         overflow-y: auto;
@@ -92,7 +91,33 @@
                         <div id="image-count" style="margin-bottom: 10px; font-weight: 500;"></div>
                         <div id="image-list"></div>
                     </div>
-
+                    
+                    <div id="selection-controls" style="display: none; margin-bottom: 10px;">
+                        <button id="select-all" style="
+                            background: #34a853;
+                            color: white;
+                            border: none;
+                            padding: 8px 12px;
+                            border-radius: 5px;
+                            cursor: pointer;
+                            width: 48%;
+                            margin-right: 4%;
+                            font-size: 12px;
+                            font-weight: 500;
+                        ">☑️ Select All</button>
+                        <button id="deselect-all" style="
+                            background: #ea4335;
+                            color: white;
+                            border: none;
+                            padding: 8px 12px;
+                            border-radius: 5px;
+                            cursor: pointer;
+                            width: 48%;
+                            font-size: 12px;
+                            font-weight: 500;
+                        ">☐ Deselect All</button>
+                    </div>
+                    
                     <div id="download-controls" style="display: none;">
                         <button id="download-all" style="
                             background: #fbbc04;
@@ -116,7 +141,7 @@
                             font-weight: 500;
                         ">📥 Selected</button>
                     </div>
-
+                    
                     <div id="progress" style="
                         margin-top: 12px;
                         background: rgba(255,255,255,0.1);
@@ -144,7 +169,7 @@
             </div>
         `;
         document.body.appendChild(panel);
-
+        
         // Add event listeners
         setupEventListeners();
     }
@@ -154,12 +179,10 @@
         const images = [];
         const processedUrls = new Set();
 
-        // Look for images in various ways
+        // Look for images with specific Google Photos gps-cs and geougc-cs URLs
         const selectors = [
-            'img[src*="googleusercontent.com/gps-cs/"]',
             'img[src*="lh3.googleusercontent.com/gps-cs/"]',
-            'img[src*="lh4.googleusercontent.com/gps-cs/"]',
-            'img[src*="lh5.googleusercontent.com/gps-cs/"]'
+            'img[src*="lh3.googleusercontent.com/geougc-cs/"]'
         ];
 
         selectors.forEach(selector => {
@@ -168,7 +191,7 @@
                 if (img.src && isGooglePhotosUrl(img.src)) {
                     const originalUrl = img.src;
                     const highResUrl = convertToHighResolution(originalUrl);
-
+                    
                     if (!processedUrls.has(highResUrl)) {
                         images.push({
                             originalUrl: originalUrl,
@@ -225,9 +248,10 @@
 
         // Also scan page source for any URLs that might not be in DOM yet
         const pageHTML = document.documentElement.outerHTML;
-        const urlRegex = /https:\/\/lh[3-6]\.googleusercontent\.com\/gps-cs\/[^"'\s>]+/g;
+        // Updated regex to match both gps-cs and geougc-cs patterns
+        const urlRegex = /https:\/\/lh3\.googleusercontent\.com\/(?:gps-cs|geougc-cs)\/[^"'\s>]+/g;
         const urlMatches = pageHTML.match(urlRegex) || [];
-
+        
         urlMatches.forEach(url => {
             if (isGooglePhotosUrl(url)) {
                 const highResUrl = convertToHighResolution(url);
@@ -247,10 +271,10 @@
         return images;
     }
 
-    // Check if URL is a Google Photos/GoogleUserContent URL
+    // Check if URL is a Google Photos/GoogleUserContent URL with gps-cs or geougc-cs path
     function isGooglePhotosUrl(url) {
-        return url.includes('googleusercontent.com/gps-cs/') &&
-               (url.includes('lh3.') || url.includes('lh4.') || url.includes('lh5.') || url.includes('lh6.'));
+        return url.startsWith('https://lh3.googleusercontent.com/gps-cs/') || 
+               url.startsWith('https://lh3.googleusercontent.com/geougc-cs/');
     }
 
     // Convert Google Photos URL to high resolution
@@ -259,7 +283,7 @@
         // Pattern: =w1200-h969-p-k-no or =w400-h300-no or similar
         const sizeParamRegex = /=[wh]\d+(-[wh]\d+)*(-[a-z-]+)*(-no)?$/;
         let cleanUrl = url.replace(sizeParamRegex, '');
-
+        
         // Add high resolution parameter
         return cleanUrl + '=' + config.targetResolution;
     }
@@ -282,13 +306,14 @@
         const resultsDiv = document.getElementById('results');
         const countDiv = document.getElementById('image-count');
         const listDiv = document.getElementById('image-list');
-
+        const selectionControls = document.getElementById('selection-controls');
+        
         countDiv.innerHTML = `
             <span style="color: #34a853;">✓ Found ${images.length} Google Photos images</span><br>
             <span style="font-size: 12px; opacity: 0.9;">Will download at ${config.targetResolution} resolution</span>
         `;
         listDiv.innerHTML = '';
-
+        
         images.forEach((img, index) => {
             const imgDiv = document.createElement('div');
             imgDiv.style.cssText = `
@@ -298,9 +323,9 @@
                 border-radius: 6px;
                 background: rgba(255,255,255,0.05);
             `;
-
+            
             const filename = getFilenameFromUrl(img.highResUrl, index);
-
+            
             imgDiv.innerHTML = `
                 <label style="display: flex; align-items: center; cursor: pointer;">
                     <input type="checkbox" checked data-index="${index}" style="margin-right: 10px; transform: scale(1.2);">
@@ -313,11 +338,12 @@
                     </div>
                 </label>
             `;
-
+            
             listDiv.appendChild(imgDiv);
         });
-
+        
         resultsDiv.style.display = 'block';
+        selectionControls.style.display = 'block'; // Show selection controls
         document.getElementById('download-controls').style.display = 'block';
     }
 
@@ -326,16 +352,16 @@
         return new Promise((resolve) => {
             const progressText = document.getElementById('progress-text');
             const progressBar = document.getElementById('progress-bar');
-
+            
             progressText.innerHTML = `
                 📥 Downloading ${index + 1}/${total}<br>
                 <span style="font-size: 12px; opacity: 0.8;">${filename}</span>
             `;
             progressBar.style.width = `${((index + 1) / total) * 100}%`;
-
+            
             // Use the high resolution URL
             const url = imageData.highResUrl;
-
+            
             fetch(url, {
                 method: 'GET',
                 headers: {
@@ -357,7 +383,7 @@
                     link.click();
                     document.body.removeChild(link);
                     URL.revokeObjectURL(link.href);
-
+                    
                     console.log(`Downloaded: ${filename}`);
                     setTimeout(resolve, config.downloadDelay);
                 })
@@ -381,34 +407,34 @@
     async function downloadImages(images, selectedOnly = false) {
         const progressDiv = document.getElementById('progress');
         progressDiv.style.display = 'block';
-
+        
         let imagesToDownload = images;
-
+        
         if (selectedOnly) {
             const checkboxes = document.querySelectorAll('#image-list input[type="checkbox"]:checked');
             const selectedIndices = Array.from(checkboxes).map(cb => parseInt(cb.dataset.index));
             imagesToDownload = images.filter((_, index) => selectedIndices.includes(index));
         }
-
+        
         if (imagesToDownload.length === 0) {
             alert('No images selected for download!');
             progressDiv.style.display = 'none';
             return;
         }
-
+        
         console.log(`Starting download of ${imagesToDownload.length} images...`);
-
+        
         for (let i = 0; i < imagesToDownload.length; i++) {
             const imageData = imagesToDownload[i];
             const filename = getFilenameFromUrl(imageData.highResUrl, i);
             await downloadImage(imageData, filename, i, imagesToDownload.length);
         }
-
+        
         document.getElementById('progress-text').innerHTML = `
             ✅ Completed!<br>
             <span style="font-size: 12px;">Downloaded ${imagesToDownload.length} high-resolution images</span>
         `;
-
+        
         setTimeout(() => {
             progressDiv.style.display = 'none';
         }, 5000);
@@ -417,70 +443,81 @@
     // Setup event listeners
     function setupEventListeners() {
         let foundImages = [];
-
+        
         document.getElementById('close-panel').addEventListener('click', () => {
             document.getElementById('gmaps-image-extractor-panel').remove();
         });
-
+        
         document.getElementById('scan-images').addEventListener('click', () => {
             document.getElementById('scan-images').textContent = '🔄 Scanning...';
             document.getElementById('scan-images').disabled = true;
-
+            
             // Wait a bit for any lazy-loaded images
             setTimeout(() => {
                 foundImages = findGooglePhotosImages();
                 displayImages(foundImages);
-
+                
                 document.getElementById('scan-images').textContent = '🔍 Scan for Google Photos Images';
                 document.getElementById('scan-images').disabled = false;
             }, 2000);
         });
 
+        // Add event listeners for selection controls
+        document.getElementById('select-all').addEventListener('click', () => {
+            const checkboxes = document.querySelectorAll('#image-list input[type="checkbox"]');
+            checkboxes.forEach(cb => cb.checked = true);
+        });
+
+        document.getElementById('deselect-all').addEventListener('click', () => {
+            const checkboxes = document.querySelectorAll('#image-list input[type="checkbox"]');
+            checkboxes.forEach(cb => cb.checked = false);
+        });
+        
         document.getElementById('download-all').addEventListener('click', () => {
             if (foundImages.length > 0) {
                 downloadImages(foundImages, false);
             }
         });
-
+        
         document.getElementById('download-selected').addEventListener('click', () => {
             if (foundImages.length > 0) {
                 downloadImages(foundImages, true);
             }
         });
-
+        
         // Make panel draggable
         let isDragging = false;
         let currentX, currentY, initialX, initialY, xOffset = 0, yOffset = 0;
-
+        
         const panel = document.getElementById('gmaps-image-extractor-panel').firstElementChild;
         const header = document.getElementById('panel-header');
-
+        
         header.addEventListener('mousedown', dragStart);
         document.addEventListener('mousemove', drag);
         document.addEventListener('mouseup', dragEnd);
-
+        
         function dragStart(e) {
             if (e.target.id === 'close-panel') return;
-
+            
             initialX = e.clientX - xOffset;
             initialY = e.clientY - yOffset;
             isDragging = true;
             header.style.cursor = 'grabbing';
         }
-
+        
         function drag(e) {
             if (isDragging) {
                 e.preventDefault();
                 currentX = e.clientX - initialX;
                 currentY = e.clientY - initialY;
-
+                
                 xOffset = currentX;
                 yOffset = currentY;
-
+                
                 panel.style.transform = `translate(${currentX}px, ${currentY}px)`;
             }
         }
-
+        
         function dragEnd() {
             isDragging = false;
             header.style.cursor = 'move';
@@ -494,7 +531,7 @@
             console.log('Google Maps Image Extractor: Not on a Google Maps contributor page');
             return;
         }
-
+        
         // Wait for page to load
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
@@ -503,7 +540,7 @@
         } else {
             setTimeout(createUI, 1000);
         }
-
+        
         console.log('Google Maps Image Extractor: Initialized');
     }
 
