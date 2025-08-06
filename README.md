@@ -36,3 +36,5 @@ The script to work specifically on Google Maps contributor pages and handle the 
 5.  Click "📥 Download All" or "📥 Selected"
 
 The script includes proper error handling, progress tracking, and generates meaningful filenames using the image IDs. All images will be downloaded in high resolution (`s2048-v1`) instead of the thumbnail resolution.
+
+Created for [Best California Movers](https://bestcaliforniamovers.com/)
