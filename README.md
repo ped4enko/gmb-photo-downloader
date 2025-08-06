@@ -20,6 +20,7 @@ The script to work specifically on Google Maps contributor pages and handle the 
     -   `https://lh3.googleusercontent.com/gps-cs/[ID]=w1200-h969-p-k-no`
 2.  **URL Transformation**: Converts them to high-resolution format:
     -   `https://lh3.googleusercontent.com/gps-cs/[ID]=s2048-v1`
+    -   /geougc-cs/
 3.  **Smart Scanning**:
     -   Scans visible images
     -   Checks data attributes for lazy-loaded images
